@@ -154,89 +154,6 @@ impl Blocks {
     }
 }
 
-/// A simple fixed-size biome storage for dealing with schematic files.
-pub struct Biomes {
-    palette: Vec<String>,
-    palette_map: HashMap<String, u32>,
-    indices: Vec<u32>,
-    size_x: u32,
-    size_z: u32,
-}
-
-impl Biomes {
-    pub fn new(size_x: u32, size_z: u32, initial_biome: &str) -> Self {
-        Self {
-            palette: vec![initial_biome.to_owned()],
-            indices: vec![0; (size_x * size_z) as usize],
-            palette_map: {
-                let mut map = HashMap::new();
-                map.insert(initial_biome.to_owned(), 0);
-                map
-            },
-            size_x,
-            size_z,
-        }
-    }
-
-    /// Get the size of this container (x, z)
-    pub fn size(&self) -> (u32, u32) {
-        (self.size_x, self.size_z)
-    }
-
-    /// Panic if a position is out of bounds
-    fn bounds_check(&self, pos_x: u32, pos_z: u32) {
-        if pos_x >= self.size_x || pos_z >= self.size_z {
-            panic!(
-                "position ({pos_x}, {pos_z}) out of bounds for biome container with size ({:?})",
-                self.size()
-            );
-        }
-    }
-
-    fn biome_index_at(&self, pos_x: u32, pos_z: u32) -> usize {
-        ((pos_x * self.size_z) + pos_z) as usize
-    }
-
-    /// Get the palette index for a biome at a position
-    pub fn get_biome_id_at(&self, pos_x: u32, pos_z: u32) -> u32 {
-        self.bounds_check(pos_x, pos_z);
-        self.indices[self.biome_index_at(pos_x, pos_z)]
-    }
-
-    /// Get the name of a biome at a position
-    pub fn get_biome_at(&self, pos_x: u32, pos_z: u32) -> &str {
-        let id = self.get_biome_id_at(pos_x, pos_z);
-        &self.palette[id as usize]
-    }
-
-    /// Get the palette index for a biome name. If the biome is not already in the palette, it will
-    /// be added.
-    pub fn get_biome_id_for(&mut self, block: &str) -> u32 {
-        match self.palette_map.get(block) {
-            Some(id) => *id,
-            None => {
-                let next_id = self.palette.len() as u32;
-                self.palette.push(block.to_owned());
-                self.palette_map.insert(block.to_owned(), next_id);
-                next_id
-            }
-        }
-    }
-
-    /// Set the palette index for a biome at a position
-    pub fn set_biome_id_at(&mut self, pos_x: u32, pos_z: u32, id: u32) {
-        self.bounds_check(pos_x, pos_z);
-        let idx = self.biome_index_at(pos_x, pos_z);
-        self.indices[idx] = id;
-    }
-
-    /// Set the name of a biome at a position
-    pub fn set_biome_at(&mut self, pos_x: u32, pos_z: u32, block: &str) {
-        let id = self.get_biome_id_for(block);
-        self.set_biome_id_at(pos_x, pos_z, id);
-    }
-}
-
 /// Block entities are blocks with extra NBT data associated with them (containers, comparators,
 /// etc.)
 pub struct BlockEntity {
@@ -247,7 +164,7 @@ pub struct BlockEntity {
 /// A schematic file
 pub struct Schematic {
     pub blocks: Blocks,
-    pub biomes: Biomes,
+    pub biomes: Blocks,
     pub block_entities: HashMap<(u32, u32, u32), BlockEntity>,
 }
 
