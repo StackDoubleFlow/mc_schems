@@ -25,7 +25,7 @@ macro_rules! typed_nbt {
 pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, SchematicError> {
     if version != 2 {
         return Err(SchematicError::UnsupportedFormat(
-            SchematicFormat::Litematica(version),
+            SchematicFormat::Sponge(version),
         ));
     }
     let data_version = *required_nbt!(nbt, "DataVersion", Int) as u32;
