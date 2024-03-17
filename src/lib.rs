@@ -37,6 +37,10 @@ pub enum SchematicFormat {
     /// The Litematica Schematic Format.
     ///
     /// Unlike Sponge, this schematic format does not have a clear specification.
+    /// [Version 1](https://github.com/maruohon/litematica/blob/1f30630d0d8f14b80b2a2b40c610ad63dd660d9d/src/main/java/fi/dy/masa/litematica/schematic/LitematicaSchematic.java)
+    /// [Version 2](https://github.com/maruohon/litematica/blob/30efb7c053202a83f62a412deecff123f0353b5d/src/main/java/fi/dy/masa/litematica/schematic/LitematicaSchematic.java)
+    /// [Version 3](https://github.com/maruohon/litematica/blob/88931a10b4351a268243ee4a513c1dafed6d0772/src/main/java/fi/dy/masa/litematica/schematic/LitematicaSchematic.java)
+    /// [Version 4](https://github.com/maruohon/litematica/blob/liteloader_1.12.2/src/main/java/litematica/schematic/LitematicaSchematic.java)
     Litematica(u32),
     /// The Schematica Schematic Format.
     ///
