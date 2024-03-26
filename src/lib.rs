@@ -164,6 +164,10 @@ pub struct BlockEntity {
 /// A schematic file
 pub struct Schematic {
     pub blocks: Blocks,
+    /// The original world coordinates of the min point on the schematic when it was created
+    pub origin: Option<(i32, i32, i32)>,
+    /// The offset from the player location to the min point in the schematic when pasing
+    pub paste_offset: Option<(i32, i32, i32)>,
     pub biomes: Option<Blocks>,
     pub data_version: Option<u32>,
     pub block_entities: HashMap<(u32, u32, u32), BlockEntity>,
