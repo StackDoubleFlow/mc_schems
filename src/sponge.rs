@@ -22,7 +22,13 @@ macro_rules! typed_nbt {
     };
 }
 
-fn read_block_container(version: u32, size_x: u32, size_y: u32, size_z: u32, nbt: &HashMap<String, Value>) -> Result<(Blocks, HashMap<(u32, u32, u32), BlockEntity>), SchematicError> {
+fn read_block_container(
+    version: u32,
+    size_x: u32,
+    size_y: u32,
+    size_z: u32,
+    nbt: &HashMap<String, Value>,
+) -> Result<(Blocks, HashMap<(u32, u32, u32), BlockEntity>), SchematicError> {
     let mut blocks = Blocks::new(size_x, size_y, size_z, "minecraft:air");
 
     let nbt_palette = required_nbt!(nbt, "Palette", Compound);
@@ -39,8 +45,8 @@ fn read_block_container(version: u32, size_x: u32, size_y: u32, size_z: u32, nbt
         .map(|b| *b as u8)
         .collect();
     let mut i = 0;
-    for y in (0..size_y).map(|y| y * size_z * size_x) {
-        for z in (0..size_z).map(|z| z * size_x) {
+    for y in 0..size_y {
+        for z in 0..size_z {
             for x in 0..size_x {
                 let mut blockstate_id = 0;
                 // Max varint length is 5
@@ -64,7 +70,14 @@ fn read_block_container(version: u32, size_x: u32, size_y: u32, size_z: u32, nbt
     let mut block_entities = HashMap::new();
     for block_entity in nbt_block_entities {
         let Value::Compound(val) = block_entity else {
-            return Err(SchematicError::MistypedField(if version == 1 { "TileEntities" } else { "BlockEntities" }.to_string()));
+            return Err(SchematicError::MistypedField(
+                if version == 1 {
+                    "TileEntities"
+                } else {
+                    "BlockEntities"
+                }
+                .to_string(),
+            ));
         };
         let pos_array = required_nbt!(val, "Pos", IntArray);
         let pos = (
@@ -85,9 +98,7 @@ fn read_block_container(version: u32, size_x: u32, size_y: u32, size_z: u32, nbt
             },
         );
     }
-    Ok((
-        blocks, block_entities
-    ))
+    Ok((blocks, block_entities))
 }
 
 pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, SchematicError> {
@@ -100,13 +111,13 @@ pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, Schematic
     let size_x = *required_nbt!(nbt, "Width", Short) as u32;
     let size_y = *required_nbt!(nbt, "Height", Short) as u32;
     let size_z = *required_nbt!(nbt, "Length", Short) as u32;
-
+    dbg!(size_x, size_y, size_z);
 
     let mut metadata = typed_nbt!(nbt, "Metadata", Compound).cloned();
     let paste_offset = if let Some(metadata) = &mut metadata {
         // We're pretty relaxed about reading this since it's non-standard
         if metadata.contains_key("WEOffsetX") {
-            Some((
+            let offset = Some((
                 typed_nbt!(metadata, "WEOffsetX", Int)
                     .copied()
                     .unwrap_or_default(),
@@ -116,7 +127,11 @@ pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, Schematic
                 typed_nbt!(metadata, "WEOffsetZ", Int)
                     .copied()
                     .unwrap_or_default(),
-            ))
+            ));
+            metadata.remove_entry("WEOffsetX");
+            metadata.remove_entry("WEOffsetY");
+            metadata.remove_entry("WEOffsetZ");
+            offset
         } else {
             None
         }
@@ -124,11 +139,20 @@ pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, Schematic
         None
     };
 
+    if metadata.as_ref().is_some_and(HashMap::is_empty) {
+        metadata = None;
+    }
+
     // Worldedit encodes the origin as offset in v1 and v2 due to a misunderstanding of the spec
     let origin = typed_nbt!(nbt, "Offset", IntArray).map(|vec| (vec[0], vec[1], vec[2]));
 
-    let block_container = if version == 3 { &required_nbt!(nbt, "Blocks", Compound) } else { &nbt.content };
-    let (blocks, block_entities) = read_block_container(version, size_x, size_y, size_z, block_container)?;
+    let block_container = if version == 3 {
+        &required_nbt!(nbt, "Blocks", Compound)
+    } else {
+        &nbt.content
+    };
+    let (blocks, block_entities) =
+        read_block_container(version, size_x, size_y, size_z, block_container)?;
 
     Ok(Schematic {
         blocks,

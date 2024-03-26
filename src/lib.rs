@@ -171,6 +171,9 @@ pub struct Schematic {
     pub biomes: Option<Blocks>,
     pub data_version: Option<u32>,
     pub block_entities: HashMap<(u32, u32, u32), BlockEntity>,
+    /// Used if the schematic format has a specific metadata tag. When reading from schematics,
+    /// metadata will not be included in this field if it was read into another field of
+    /// [`Schematic`] (e.g. you won't see `WEOffsetX`).
     pub metadata: Option<HashMap<String, nbt::Value>>,
 }
 
