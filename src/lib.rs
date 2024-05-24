@@ -152,6 +152,11 @@ impl Blocks {
         let id = self.get_block_id_for(block);
         self.set_block_id_at(pos_x, pos_y, pos_z, id);
     }
+
+    /// Get an iterator of all types of blocks within this container
+    pub fn blocks_in_palette(&self) -> impl Iterator<Item = &str> {
+        self.palette.iter().map(|x| x.as_str())
+    }
 }
 
 /// Block entities are blocks with extra NBT data associated with them (containers, comparators,
