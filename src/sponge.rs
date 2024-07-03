@@ -111,7 +111,6 @@ pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, Schematic
     let size_x = *required_nbt!(nbt, "Width", Short) as u32;
     let size_y = *required_nbt!(nbt, "Height", Short) as u32;
     let size_z = *required_nbt!(nbt, "Length", Short) as u32;
-    dbg!(size_x, size_y, size_z);
 
     let mut metadata = typed_nbt!(nbt, "Metadata", Compound).cloned();
     let paste_offset = if let Some(metadata) = &mut metadata {
