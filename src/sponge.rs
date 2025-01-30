@@ -3,7 +3,7 @@ use nbt::Value;
 use std::collections::HashMap;
 
 macro_rules! required_nbt {
-    ($nbt:expr, $name:literal, $ty:ident) => {
+    ($nbt:expr, $name:tt, $ty:ident) => {
         match $nbt.get($name) {
             Some(Value::$ty(value)) => value,
             Some(_) => return Err(SchematicError::MistypedField($name.to_owned())),
@@ -13,7 +13,7 @@ macro_rules! required_nbt {
 }
 
 macro_rules! typed_nbt {
-    ($nbt:expr, $name:literal, $ty:ident) => {
+    ($nbt:expr, $name:tt, $ty:ident) => {
         match $nbt.get($name) {
             Some(Value::$ty(value)) => Some(value),
             Some(_) => return Err(SchematicError::MistypedField($name.to_owned())),
@@ -40,7 +40,12 @@ fn read_block_container(
         palette.insert(*value as u32, blocks.get_block_id_for(name));
     }
 
-    let block_arr: Vec<u8> = required_nbt!(nbt, "BlockData", ByteArray)
+    let data_name = match version {
+        2 => "BlockData",
+        3 => "Data",
+        _ => unreachable!(),
+    };
+    let block_arr: Vec<u8> = required_nbt!(nbt, data_name, ByteArray)
         .iter()
         .map(|b| *b as u8)
         .collect();
@@ -102,18 +107,29 @@ fn read_block_container(
 }
 
 pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, SchematicError> {
-    if version != 2 {
-        return Err(SchematicError::UnsupportedFormat(SchematicFormat::Sponge(
-            version,
-        )));
-    }
+    let nbt = match version {
+        2 => &nbt.content,
+        3 => required_nbt!(nbt, "Schematic", Compound),
+        _ => {
+            return Err(SchematicError::UnsupportedFormat(SchematicFormat::Sponge(
+                version,
+            )))
+        }
+    };
+
     let data_version = *required_nbt!(nbt, "DataVersion", Int) as u32;
     let size_x = *required_nbt!(nbt, "Width", Short) as u32;
     let size_y = *required_nbt!(nbt, "Height", Short) as u32;
     let size_z = *required_nbt!(nbt, "Length", Short) as u32;
 
     let mut metadata = typed_nbt!(nbt, "Metadata", Compound).cloned();
-    let paste_offset = if let Some(metadata) = &mut metadata {
+    let paste_offset = if version == 3 {
+        let offset = required_nbt!(nbt, "Offset", IntArray);
+        if offset.len() != 3 {
+            return Err(SchematicError::MistypedField("Offset".to_owned()));
+        }
+        Some((offset[0], offset[1], offset[2]))
+    } else if let Some(metadata) = &mut metadata {
         // We're pretty relaxed about reading this since it's non-standard
         if metadata.contains_key("WEOffsetX") {
             let offset = Some((
@@ -143,12 +159,16 @@ pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, Schematic
     }
 
     // Worldedit encodes the origin as offset in v1 and v2 due to a misunderstanding of the spec
-    let origin = typed_nbt!(nbt, "Offset", IntArray).map(|vec| (vec[0], vec[1], vec[2]));
+    let origin = if version < 3 {
+        typed_nbt!(nbt, "Offset", IntArray).map(|vec| (vec[0], vec[1], vec[2]))
+    } else {
+        None
+    };
 
     let block_container = if version == 3 {
         &required_nbt!(nbt, "Blocks", Compound)
     } else {
-        &nbt.content
+        nbt
     };
     let (blocks, block_entities) =
         read_block_container(version, size_x, size_y, size_z, block_container)?;

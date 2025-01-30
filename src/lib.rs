@@ -205,8 +205,18 @@ impl Schematic {
                     SchematicFormat::Litematica(version),
                 ));
             }
-            // This is a Sponge schematic
-            return sponge::deserialize(&nbt, version);
+            if matches!(version, 1 | 2) {
+                // This is a Sponge schematic (v1 or v2)
+                // Sponge v3 and newer stores the Schematic schema in a nested tag
+                return sponge::deserialize(&nbt, version);
+            }
+        } else if let Some(nbt::Value::Compound(schem_compound)) = nbt.get("Schematic") {
+            if let Some(nbt::Value::Int(version)) = schem_compound.get("Version") {
+                let version = *version as u32;
+                if version == 3 {
+                    return sponge::deserialize(&nbt, version);
+                }
+            }
         }
 
         Err(SchematicError::UnrecognizedFormat)
