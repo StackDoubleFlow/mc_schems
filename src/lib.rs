@@ -20,6 +20,8 @@ pub enum SchematicError {
     MissingRequiredField(String),
     #[error("mistyped NBT tag: {0}")]
     MistypedField(String),
+    #[error("invalid value for NBT tag: {0}")]
+    InvalidValue(String),
 }
 
 /// Types of schematic formats used by Schematica
@@ -228,7 +230,13 @@ impl Schematic {
     /// case, [`SchematicError::UnsupportedFormat`] is returned.
     pub fn serialize(&self, format: SchematicFormat) -> Result<Vec<u8>, SchematicError> {
         let data = match format {
-            SchematicFormat::Sponge(version @ 3) => sponge::serialize(self, version),
+            SchematicFormat::Sponge(version) => {
+                if !matches!(version, 2 | 3) {
+                    return Err(SchematicError::UnsupportedFormat(format));
+                }
+
+                sponge::serialize(self, version)?
+            },
             _ => return Err(SchematicError::UnsupportedFormat(format)),
         };
         Ok(data)

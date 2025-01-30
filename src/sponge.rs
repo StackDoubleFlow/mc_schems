@@ -185,6 +185,146 @@ pub fn deserialize(nbt: &nbt::Blob, version: u32) -> Result<Schematic, Schematic
     })
 }
 
-pub fn serialize(schem: &Schematic, version: u32) -> Vec<u8> {
-    todo!();
+macro_rules! convert_or_err {
+    ($nbt:expr, $name:tt, $ty:ident, $val:expr) => {
+        $nbt.insert(
+            $name.to_owned(),
+            Value::$ty(
+                $val.try_into()
+                    .map_err(|_| SchematicError::InvalidValue($name.to_owned()))?,
+            ),
+        )
+    };
+}
+
+fn write_block_container(
+    version: u32,
+    blocks: &Blocks,
+    block_entities: &HashMap<(u32, u32, u32), BlockEntity>,
+    nbt: &mut HashMap<String, Value>,
+) {
+    let mut palette = HashMap::new();
+    for (idx, name) in blocks.palette.iter().enumerate() {
+        palette.insert(name.to_string(), Value::Int(idx as i32));
+    }
+    nbt.insert("Palette".to_owned(), Value::Compound(palette));
+
+    let mut bytes = Vec::new();
+    for y in 0..blocks.size_y {
+        for z in 0..blocks.size_z {
+            for x in 0..blocks.size_x {
+                let mut idx = blocks.get_block_id_at(x, y, z);
+                // TODO: check max size for varint (5)
+                loop {
+                    let mut temp = (idx & 0b1111_1111) as u8;
+                    idx >>= 7;
+                    if idx != 0 {
+                        temp |= 0b1000_0000;
+                    }
+                    bytes.push(temp as i8);
+                    if idx == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    let data_name = match version {
+        2 => "BlockData",
+        3 => "Data",
+        _ => unreachable!(),
+    };
+    nbt.insert(data_name.to_owned(), Value::ByteArray(bytes));
+
+    let mut nbt_block_entities = Vec::new();
+    for (pos, block_entity) in block_entities {
+        let mut data = block_entity.data.clone();
+        data.insert("Id".to_owned(), nbt::Value::String(block_entity.id.clone()));
+        let pos_arr = vec![pos.0 as i32, pos.1 as i32, pos.2 as i32];
+        data.insert("Pos".to_owned(), nbt::Value::IntArray(pos_arr));
+        nbt_block_entities.push(nbt::Value::Compound(data));
+    }
+    nbt.insert(
+        "BlockEntities".to_owned(),
+        nbt::Value::List(nbt_block_entities),
+    );
+}
+
+pub fn serialize(schem: &Schematic, version: u32) -> Result<Vec<u8>, SchematicError> {
+    let mut nbt = HashMap::new();
+
+    nbt.insert("Version".to_owned(), Value::Int(version as i32));
+    nbt.insert(
+        "DataVersion".to_owned(),
+        Value::Int(
+            schem
+                .data_version
+                .ok_or_else(|| SchematicError::MissingRequiredField("DataVersion".to_owned()))?
+                as i32,
+        ),
+    );
+    convert_or_err!(nbt, "Width", Short, schem.blocks.size_x);
+    convert_or_err!(nbt, "Height", Short, schem.blocks.size_y);
+    convert_or_err!(nbt, "Length", Short, schem.blocks.size_z);
+
+    // WorldEdit puts the paste offset into the metadata for version < 3, so we will do the same
+    if version < 3 && schem.paste_offset.is_some() || schem.metadata.is_some() {
+        let mut metadata = if let Some(metadata) = &schem.metadata {
+            metadata.clone()
+        } else {
+            HashMap::new()
+        };
+        if version < 3 {
+            if let Some(offset) = schem.paste_offset {
+                metadata.insert("WEOffsetX".to_owned(), Value::Int(offset.0));
+                metadata.insert("WEOffsetY".to_owned(), Value::Int(offset.1));
+                metadata.insert("WEOffsetZ".to_owned(), Value::Int(offset.2));
+            }
+        }
+    }
+
+    if version == 3 {
+        let offset = schem
+            .paste_offset
+            .ok_or_else(|| SchematicError::MissingRequiredField("Offset".to_owned()))?;
+        nbt.insert(
+            "Offset".to_owned(),
+            nbt::Value::IntArray(vec![offset.0, offset.1, offset.2]),
+        );
+    }
+
+    if version < 3 {
+        // Worldedit encodes the origin as offset in v1 and v2 due to a misunderstanding of the
+        // spec, so we'll replicate that behaviour
+        if let Some(origin) = schem.origin {
+            nbt.insert(
+                "Offset".to_owned(),
+                nbt::Value::IntArray(vec![origin.0, origin.1, origin.2]),
+            );
+        }
+    }
+
+    if version < 3 {
+        write_block_container(version, &schem.blocks, &schem.block_entities, &mut nbt);
+    } else {
+        let mut container = HashMap::new();
+        write_block_container(version, &schem.blocks, &schem.block_entities, &mut container);
+        nbt.insert("Blocks".to_owned(), Value::Compound(container));
+    };
+
+    let root = match version {
+        2 => nbt::Blob {
+            content: nbt,
+            title: String::new(),
+        },
+        3 => {
+            let mut blob = nbt::Blob::new();
+            blob.insert("Schematic", nbt::Value::Compound(nbt)).unwrap();
+            blob
+        }
+        _ => unreachable!(),
+    };
+    let mut data = Vec::new();
+    root.to_gzip_writer(&mut data)?;
+    Ok(data)
 }
